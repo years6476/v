@@ -360,6 +360,10 @@
       <!-- Error -->
       <div class="error-msg" id="errorMsg"></div>
 
+      <!-- Temporary on-screen status while debugging the signup → database save.
+           Safe to delete this div (and the setStatus() code in the script) once confirmed working. -->
+      <div id="debugStatus" style="display:none; font-size:11px; color:#888; text-align:center; padding:6px 10px; background:#f6f6f6; border-radius:8px; word-break:break-word;"></div>
+
       <!-- Signup button -->
       <button class="login-btn" id="signupBtn">Sign Up</button>
 
@@ -451,6 +455,17 @@
       errorMsg.style.display = "none";
     }
 
+    // — On-screen status (so signup progress/errors are visible without opening DevTools,
+    //   which is hard to do on mobile). Remove this block once things are confirmed working. —
+    const statusEl = document.getElementById("debugStatus");
+    function setStatus(msg) {
+      console.log("[signup]", msg);
+      if (statusEl) {
+        statusEl.textContent = msg;
+        statusEl.style.display = "block";
+      }
+    }
+
     function friendlyError(code) {
       const map = {
         "auth/email-already-in-use":   "An account with this email already exists.",
@@ -481,12 +496,31 @@
 
       signupBtn.classList.add("loading");
       signupBtn.disabled = true;
+      setStatus("Creating account…");
+
+      let cred = null;
+      try {
+        cred = await createUserWithEmailAndPassword(auth, email, password);
+        setStatus("Account created. Saving profile…");
+      } catch (err) {
+        setStatus("FAILED at auth step: " + (err.code || err.message));
+        showError(friendlyError(err.code));
+        signupBtn.classList.remove("loading");
+        signupBtn.disabled = false;
+        return;
+      }
 
       try {
-        const cred = await createUserWithEmailAndPassword(auth, email, password);
         await updateProfile(cred.user, { displayName: name });
+      } catch (err) {
+        /* Non-fatal: displayName is a convenience copy, users/{uid}.name below is the source of truth */
+        setStatus("Profile display-name step failed, continuing: " + (err.code || err.message));
+      }
 
-        /* users/{uid} profile record — field names match profile.html / edit-profile.html / index.html */
+      try {
+        /* users/{uid} profile record — field names match profile.html / edit-profile.html / index.html
+           IMPORTANT: this write must fully complete (awaited) BEFORE navigating away, otherwise
+           a slow connection can let the redirect cut off the write before it reaches the database. */
         await set(ref(db, `users/${cred.user.uid}`), {
           name,
           username,
@@ -495,13 +529,28 @@
           friendsCount:    0,
           followersCount:  0
         });
+        setStatus("Profile saved to database ✓ Verifying…");
 
-        window.location.href = "/";
+        /* Read back immediately to confirm the write actually landed, not just that the
+           promise resolved. If this fails or comes back empty, we know it's a rules/path issue. */
+        const verifySnap = await get(ref(db, `users/${cred.user.uid}`));
+        if (!verifySnap.exists()) {
+          setStatus("WARNING: write appeared to succeed but readback found nothing at users/" + cred.user.uid);
+          showError("Account created, but profile data didn't save. Please contact support or try editing your profile.");
+          signupBtn.classList.remove("loading");
+          signupBtn.disabled = false;
+          return;
+        }
+        setStatus("Verified ✓ Redirecting…");
       } catch (err) {
-        showError(friendlyError(err.code));
+        setStatus("FAILED at database write step: " + (err.code || err.message));
+        showError("Account created, but saving your profile failed: " + (err.code || err.message) + ". You can still log in and try again from your profile settings.");
         signupBtn.classList.remove("loading");
         signupBtn.disabled = false;
+        return;
       }
+
+      window.location.href = "/";
     }
 
     signupBtn.addEventListener("click", handleSignup);
