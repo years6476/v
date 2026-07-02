@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Login � SocialFeed</title>
+  <title>Login — SocialFeed</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet" />
@@ -241,7 +241,7 @@
     }
     .signup-text a:hover { opacity: 0.8; text-decoration: underline; }
 
-    /*  Illustration � full width  */
+    /*  Illustration — full width  */
     .illustration {
       width: 100%;
       margin-top: 80px;
@@ -339,7 +339,7 @@
 
   </div>
 
-  <!-- Illustration � full width -->
+  <!-- Illustration — full width -->
   <div class="illustration">
     <img
       src="https://i.ibb.co.com/DyV9tDW/file-00000000dfb871faa658852ecbb02a4b-1-removebg-preview.png"
@@ -350,7 +350,7 @@
 
 
   <!--  Firebase Logic (ES Module)  -->
-  <script type="module">
+  <script type="module" id="loginModule">
     import { auth } from "./config.js";
     import {
       signInWithEmailAndPassword,
@@ -448,6 +448,34 @@
       el.addEventListener("keydown", (e) => { if (e.key === "Enter") handleLogin(); });
       el.addEventListener("input",   clearError);
     });
+    window.__loginReady = true;
+  </script>
+
+  <script>
+    (function () {
+      const errorMsg = document.getElementById("errorMsg");
+      function showDiagError(text) {
+        if (!errorMsg) return;
+        errorMsg.textContent = text;
+        errorMsg.style.display = "block";
+      }
+      const moduleScript = document.getElementById("loginModule");
+      if (moduleScript) {
+        moduleScript.addEventListener("error", function () {
+          showDiagError("স্ক্রিপ্ট লোড হয়নি — config.js ফাইলটা 404 দিচ্ছে অথবা JS-এর বদলে HTML রিটার্ন করছে (হোস্টিং rewrite rule চেক করুন)।");
+        });
+      }
+      window.addEventListener("error", function (e) {
+        if (!window.__loginReady) {
+          showDiagError("Script এরর (লাইন " + e.lineno + "): " + (e.message || "অজানা সমস্যা"));
+        }
+      });
+      setTimeout(function () {
+        if (!window.__loginReady) {
+          showDiagError("স্ক্রিপ্ট ইনিশিয়ালাইজ হয়নি — config.js ফাইল বা হোস্টিং সেটআপে সমস্যা থাকতে পারে।");
+        }
+      }, 3000);
+    })();
   </script>
 
 </body>
